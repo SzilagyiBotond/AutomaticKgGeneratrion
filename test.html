@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neo4j Interactive Graph</title>
+    
+    <!-- Load Neovis.js -->
+    <script src="https://cdn.jsdelivr.net/npm/neovis.js@2.0.2"></script>
+
+    <style>
+        body { font-family: Arial, sans-serif; margin: 10px; background: #f4f4f4; }
+        #container { display: flex; }
+        #viz { width: 75vw; height: 90vh; border: 1px solid #ddd; background: #fff; }
+        #info { width: 25vw; padding: 10px; background: #fff; border-left: 1px solid #ddd; }
+        h2 { margin: 0; font-size: 20px; }
+        #search { margin-bottom: 10px; }
+        input, button { padding: 8px; margin: 5px; }
+    </style>
+</head>
+<body>
+
+    <h2>Neo4j Interactive Graph with Node Expansion</h2>
+    <div id="search">
+        <input type="text" id="queryInput" placeholder="MATCH (n) RETURN n LIMIT 25" style="width: 300px;">
+        <button onclick="runCustomQuery()">Run Query</button>
+    </div>
+
+    <div id="container">
+        <div id="viz"></div>
+        <div id="info">
+            <h2>Node Info</h2>
+            <div id="nodeInfo">Click a node to see details.</div>
+        </div>
+    </div>
+
+    <script>
+        let viz;
+
+        function draw() {
+            const config = {
+                containerId: "viz",
+                neo4j: {
+                    serverUrl: "neo4j://localhost:7694",
+                    serverUser: "neo4j",
+                    serverPassword: "testpassword"
+                },
+                labels: {
+                    "Concept": { label: "name", color: "blue" },
+                    "Title": { label: "name", color: "orange" },
+                    "Year": {label: "name",color: "green"},
+                    "Author": {label: "name", color: "yellow"}
+                },
+                relationships: {
+                    "hasMainConcept": { label: "reason", color: "green" },
+                    "hasRelatedConcept": {label: "reason"}
+                },
+                initialCypher: "MATCH (n)-[r]-(m) RETURN n,r,m LIMIT 25"
+            };
+
+            viz = new NeoVis.default(config);
+            viz.render();
+
+            viz.registerOnEvent("clickNode", (event) => {
+                if (!event.nodes || event.nodes.length === 0) return; // Prevent error
+
+                let nodeId = event.nodes[0];
+                let node = viz.network.body.data.nodes.get(nodeId);
+
+                if (node) {
+                    showNodeInfo(node);
+                    expandNode(nodeId);
+                }
+            });
+
+            // Handle relationship clicks
+            viz.registerOnEvent("clickEdge", (event) => {
+                if (!event.edges || event.edges.length === 0) return; // Prevent error
+
+                let edgeId = event.edges[0];
+                let edge = viz.network.body.data.edges.get(edgeId);
+
+                if (edge) {
+                    showRelationshipInfo(edge);
+                }
+            });
+
+            // Hide info when clicking outside nodes/edges
+            viz.registerOnEvent("deselectNode", hideInfo);
+            viz.registerOnEvent("deselectEdge", hideInfo);
+        }
+
+        function showNodeInfo(node) {
+            let infoDiv = document.getElementById("nodeInfo");
+            let infoContainer = document.getElementById("info");
+
+            let infoHTML = `<strong>Type:</strong> ${node.group}<br><strong>Properties:</strong><br>`;
+            for (let key in node) {
+                if (!["id", "label", "group"].includes(key)) {
+                    infoHTML += `<strong>${key}:</strong> ${node[key]}<br>`;
+                }
+            }
+
+            infoDiv.innerHTML = infoHTML;
+            infoContainer.style.display = "block"; // Show info box
+        }
+
+        function showRelationshipInfo(edge) {
+            let infoDiv = document.getElementById("nodeInfo");
+            let infoContainer = document.getElementById("info");
+
+            infoDiv.innerHTML = `<strong>Relationship:</strong> ${edge.label}<br>`;
+            infoContainer.style.display = "block"; // Show info box
+        }
+
+        function hideInfo() {
+            document.getElementById("info").style.display = "none";
+        }
+
+        function expandNode(nodeId) {
+            let cypherQuery = `MATCH (n)-[r]-(m) WHERE id(n) = ${nodeId} RETURN n,r,m`;
+            viz.renderWithCypher(cypherQuery);
+        }
+
+        function runCustomQuery() {
+            let query = document.getElementById("queryInput").value;
+            viz.renderWithCypher(query);
+        }
+
+        draw();
+    </script>
+
+</body>
+</html>
